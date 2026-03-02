@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="cs">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BookClaw Literární Aréna</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        [v-cloak] {
+            display: none;
+        }
+
+        .markdown-body h1 {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 0.5em;
+        }
+
+        .markdown-body p {
+            margin-bottom: 1em;
+        }
+
+        .markdown-body strong {
+            font-weight: bold;
+            color: #1e40af;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* .no-scrollbar: Hide scrollbar for Chrome, Safari and Opera */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* .no-scrollbar: Hide scrollbar for IE, Edge and Firefox */
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            /* IE and Edge */
+            scrollbar-width: none;
+            /* Firefox */
+        }
+
+        /* Vue Transition pro padající seznamy */
+        .list-enter-active,
+        .list-leave-active {
+            transition: all 0.5s ease;
+        }
+
+        .list-enter-from,
+        .list-leave-to {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+
+        /* Cyberpunk Neon Glow for Factions */
+        .glow-scifi {
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+            border-color: rgba(56, 189, 248, 0.6);
+        }
+
+        .glow-fantasy {
+            box-shadow: 0 0 10px rgba(251, 146, 60, 0.4);
+            border-color: rgba(251, 146, 60, 0.6);
+        }
+
+        .glow-critic {
+            box-shadow: 0 0 10px rgba(244, 63, 94, 0.4);
+            border-color: rgba(244, 63, 94, 0.6);
+        }
+
+        /* Matrix Console */
+        .matrix-console {
+            background-color: #050510;
+            color: #00ff00;
+            font-family: 'Courier New', Courier, monospace;
+            text-shadow: 0 0 5px #00ff00;
+        }
+    </style>
+    <!-- Chart.js pro RPG Radar Grafy -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body class="bg-slate-950 text-slate-300 font-sans h-screen overflow-hidden">
+
+    <div id="app" v-cloak class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 h-full flex flex-col overflow-hidden">
+
+        <header class="mb-4 flex-none">
+            <div class="flex justify-between items-end mb-4 border-b border-slate-800 pb-4">
+                <div>
+                    <h1
+                        class="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 drop-shadow-[0_0_10px_rgba(56,189,248,0.5)]">
+                        BookClaw <span class="text-lg text-slate-500 font-normal">v2.0</span>
+                    </h1>
+                    <p class="text-slate-400 text-sm mt-1 uppercase tracking-widest text-[10px] font-bold">Autonomní
+                        aréna spisovatelů a kritiků [System Active]</p>
+                </div>
+                <div class="space-x-3">
+                    <a href="/static/relationships.html" target="_blank"
+                        class="text-xs bg-slate-800 border border-rose-500/50 hover:bg-rose-900/50 text-rose-400 font-mono py-2 px-4 rounded transition inline-block glow-critic">
+                        🕸️ SOC. GRAF
+                    </a>
+                    <button @click="initReborn" :disabled="loading"
+                        class="text-xs bg-slate-800 border border-slate-600 hover:bg-slate-700 text-slate-300 font-mono py-2 px-4 rounded transition">
+                        [INIT_DB]
+                    </button>
+                    <a href="/static/summary.html" target="_blank"
+                        class="text-xs bg-slate-800 border border-indigo-500/50 hover:bg-indigo-900/50 text-indigo-400 font-mono py-2 px-4 rounded transition inline-block">
+                        📚 ARCHÍV KOL
+                    </a>
+                </div>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1 overflow-hidden min-h-0">
+
+            <!-- Levý sloupec: Rozhraní pro spuštění a Seznam autorů -->
+            <div class="space-y-8 lg:col-span-4 overflow-y-auto pr-2 pb-4 no-scrollbar">
+
+                <!-- 1. Ovládací panel -->
+                <div
+                    class="bg-slate-900 shadow-lg shadow-black/50 rounded-lg p-5 border border-slate-800 relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-purple-600"></div>
+                    <h2 class="text-lg font-bold mb-4 text-slate-200 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                        [SYS.RUN_ROUND]
+                    </h2>
+
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Počet
+                                kol
+                                (NUMBER OF ROUNDS)</label>
+                            <div class="flex items-center space-x-3">
+                                <input v-model.number="form.num_rounds" type="range" min="1" max="5"
+                                    class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                                <span class="font-bold text-blue-400 w-4 text-center font-mono">{{ form.num_rounds
+                                    }}</span>
+                            </div>
+                        </div>
+                        <div
+                            class="text-[10px] text-slate-500 font-mono mt-3 mb-2 flex items-center space-x-2 bg-slate-900/50 p-2 rounded border border-slate-700/50">
+                            <span class="text-green-500 animate-pulse">></span>
+                            <span>SYS.PARAM.THEME = [AUTO_GENERATE]</span>
+                        </div>
+                        <button @click="runRound" :disabled="isRunning"
+                            class="w-full mt-4 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-mono py-2.5 px-4 rounded transition uppercase tracking-wider text-sm shadow-[0_0_10px_rgba(37,99,235,0.4)]">
+                            {{ isRunning ? '>>> SYNC_ACTIVE...' : '> EXECUTE_AGENTS' }}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 1.5. MATRIX LOGGER (Server Console) -->
+                <div
+                    class="bg-[#050510] border border-green-900/50 rounded-lg p-3 shadow-lg h-64 flex flex-col relative overflow-hidden">
+                    <div
+                        class="absolute top-0 w-full h-8 bg-gradient-to-b from-[#050510] to-transparent z-10 pointer-events-none">
+                    </div>
+                    <div
+                        class="absolute bottom-0 w-full h-8 bg-gradient-to-t from-[#050510] to-transparent z-10 pointer-events-none">
+                    </div>
+
+                    <h3
+                        class="text-[10px] text-green-500/70 font-mono uppercase tracking-widest border-b border-green-900/30 pb-1 mb-2 z-20">
+                        Terminal / Live Logs</h3>
+
+                    <div class="overflow-y-auto no-scrollbar flex-1 flex flex-col justify-end" ref="logContainer">
+                        <transition-group name="list" tag="div" class="space-y-1">
+                            <div v-for="(log, idx) in serverLogs" :key="log.id"
+                                class="text-[11px] font-mono text-green-500/90 drop-shadow-[0_0_2px_rgba(0,255,0,0.5)]">
+                                <span class="text-green-700">[{{ log.time }}]</span> {{ log.msg }}
+                            </div>
+                        </transition-group>
+                    </div>
+                </div>
+
+                <!-- 2. Seznam autorů -->
+                <div class="bg-slate-900 shadow-lg shadow-black/50 rounded-lg p-5 border border-slate-800">
+                    <h2 class="text-lg font-bold mb-4 text-slate-200 border-b border-slate-700 pb-2">Naši Autoři
+                        (Evoluce)</h2>
+                    <div class="space-y-4">
+                        <transition-group name="list" tag="div" class="space-y-4">
+                            <div v-for="author in authors" :key="author.id"
+                                class="p-4 border rounded-lg cursor-pointer transition-all duration-300 transform hover:-translate-y-1 hover:shadow-xl relative overflow-hidden"
+                                :class="{'border-blue-500/50 glow-scifi bg-slate-900': author.genre === 'scifi', 'border-amber-500/50 glow-fantasy bg-slate-900': author.genre === 'fantasy', 'border-slate-700 bg-slate-900': !author.genre}"
+                                @click="activeAuthor = activeAuthor === author ? null : author">
+
+                                <!-- Barevný pruh pozadí -->
+                                <div class="absolute inset-0 opacity-10 pointer-events-none"
+                                    :class="{'bg-gradient-to-r from-blue-500 to-transparent': author.genre === 'scifi', 'bg-gradient-to-r from-amber-500 to-transparent': author.genre === 'fantasy'}">
+                                </div>
+
+                                <div class="flex flex-col gap-2 relative z-10">
+                                    <!-- STAV ČINNOSTI NA PRVNÍM MÍSTĚ -->
+                                    <div v-show="orchestratorState.authors && orchestratorState.authors[author.id]"
+                                        class="text-[10px] font-bold text-slate-200 bg-slate-800/80 px-2 py-0.5 rounded w-full border border-slate-600 uppercase tracking-tighter"
+                                        title="Aktuální činnost autorského agenta">
+                                        {{ orchestratorState.authors[author.id] }}
+                                    </div>
+                                    <div class="flex flex-col items-start gap-1">
+                                        <span class="font-bold text-slate-100 text-[15px] drop-shadow-md">{{
+                                            author.name
+                                            }}</span>
+                                        <div class="flex items-center space-x-2 mt-1">
+                                            <span
+                                                :class="{'bg-blue-900/50 text-blue-300 border-blue-500/50': author.genre === 'scifi', 'bg-amber-900/50 text-amber-300 border-amber-500/50': author.genre === 'fantasy'}"
+                                                class="text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-wider border">
+                                                {{ author.genre }}
+                                            </span>
+                                            <span
+                                                :class="{'bg-purple-900/50 text-purple-300 border-purple-500/50': author.write_mode === 'novel', 'bg-emerald-900/50 text-emerald-300 border-emerald-500/50': author.write_mode === 'random'}"
+                                                class="text-[9px] px-2 py-0.5 rounded font-bold uppercase border">
+                                                {{ author.write_mode === 'novel' ? 'ROMÁN' : 'NÁHODA' }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Detail Autora -->
+                                <div v-if="activeAuthor && activeAuthor.id === author.id"
+                                    class="mt-4 pt-4 border-t border-slate-700/50 text-xs text-slate-400 space-y-3 relative z-10 transition-all">
+
+                                    <p><strong>Styl:</strong> <span class="text-slate-200">{{ author.style }}</span>
+                                    </p>
+
+                                    <p class="text-emerald-400 font-bold tracking-wider mt-2">Znalosti světa:</p>
+                                    <div
+                                        class="bg-slate-950 text-emerald-300/80 p-2.5 rounded text-[11px] font-mono overflow-hidden whitespace-pre-wrap border border-slate-800/80">
+                                        {{ author.knowledge_base }}</div>
+
+                                    <p class="text-indigo-400 font-bold tracking-wider mt-2">Vztahy a paměť:</p>
+                                    <div
+                                        class="bg-slate-950 text-indigo-300/80 p-2.5 rounded text-[11px] font-mono overflow-hidden whitespace-pre-wrap border border-slate-800/80">
+                                        {{ author.relationships }}</div>
+
+                                    <div v-if="author.local_bible">
+                                        <p class="text-amber-400 font-bold tracking-wider mt-2">Lokální Bible (Lore
+                                            autora):</p>
+                                        <div
+                                            class="bg-slate-950 text-amber-300/80 p-2.5 rounded text-[11px] font-mono overflow-hidden whitespace-pre-wrap border border-slate-800/80">
+                                            {{ author.local_bible }}</div>
+                                    </div>
+
+                                    <div v-if="author.write_mode === 'novel' && author.novel_outline">
+                                        <p class="text-blue-400 font-bold tracking-wider mt-2">📖 Osnova románu:</p>
+                                        <div
+                                            class="bg-slate-950 text-blue-300/80 p-2.5 rounded text-[11px] font-mono overflow-hidden whitespace-pre-wrap border border-slate-800/80">
+                                            {{ author.novel_outline }}</div>
+                                    </div>
+
+                                    <p class="text-slate-300 font-bold tracking-wider mt-2">Persona (System Prompt):
+                                    </p>
+                                    <div
+                                        class="bg-slate-950 text-slate-400 p-2.5 rounded text-[11px] font-mono overflow-auto max-h-48 whitespace-pre-wrap border border-slate-800/80">
+                                        {{ author.persona_prompt }}</div>
+                                </div>
+                            </div>
+                        </transition-group>
+                        <div v-if="authors.length === 0" class="text-sm text-slate-500 italic">Zatím žádní autoři.
+                            Spusťte Init Databázi nahoře.</div>
+                    </div>
+                </div>
+
+                <!-- 3. Seznam Kritiků -->
+                <div class="bg-slate-900 shadow-lg shadow-black/50 rounded-lg p-5 border border-slate-800 mt-8">
+                    <h2 class="text-lg font-bold mb-4 text-slate-200 border-b border-slate-700 pb-2">Naši Kritici
+                        (Evoluce)</h2>
+                    <div class="space-y-4">
+                        <transition-group name="list" tag="div" class="space-y-4">
+                            <div v-for="critic in critics" :key="critic.id"
+                                class="p-4 border border-rose-500/30 rounded-lg cursor-pointer transition-all duration-300 transform hover:-translate-y-1 hover:shadow-xl relative overflow-hidden bg-slate-900 glow-critic"
+                                @click="activeAuthor === 'c'+critic.id ? activeAuthor = null : activeAuthor = 'c'+critic.id">
+
+                                <div
+                                    class="absolute inset-0 opacity-10 pointer-events-none bg-gradient-to-r from-rose-600 to-transparent">
+                                </div>
+
+                                <div class="flex flex-col gap-2 relative z-10">
+                                    <!-- STAV ČINNOSTI NA PRVNÍM MÍSTĚ -->
+                                    <div v-show="orchestratorState.critics && orchestratorState.critics[critic.id]"
+                                        class="text-[10px] font-bold text-slate-200 bg-rose-900/80 px-2 py-0.5 rounded w-full border border-rose-500/50 uppercase tracking-tighter shadow-inner"
+                                        title="Aktuální činnost kritika">
+                                        {{ orchestratorState.critics[critic.id] }}
+                                    </div>
+                                    <div class="flex flex-col items-start gap-1">
+                                        <span class="font-bold text-slate-100 text-[15px] drop-shadow-md">{{
+                                            critic.name
+                                            }}</span>
+                                        <div class="flex items-center space-x-1 mt-1">
+                                            <span
+                                                class="bg-rose-900/50 text-rose-300 text-[9px] px-2 py-0.5 rounded font-bold uppercase border border-rose-500/50 tracking-wider">
+                                                KRITIK
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div v-if="activeAuthor && activeAuthor === 'c'+critic.id"
+                                    class="mt-4 pt-4 border-t border-slate-700/50 text-xs text-slate-400 space-y-3 relative z-10 transition-all">
+
+                                    <p class="text-emerald-400 font-bold tracking-wider">Znalosti a Lore:</p>
+                                    <div
+                                        class="bg-slate-950 text-emerald-300/80 p-2.5 rounded text-[11px] font-mono overflow-hidden whitespace-pre-wrap border border-slate-800/80">
+                                        {{ critic.knowledge_base }}</div>
+                                    <p class="text-indigo-400 font-bold tracking-wider mt-2">Vztahy a paměť:</p>
+                                    <div
+                                        class="bg-slate-950 text-indigo-300/80 p-2.5 rounded text-[11px] font-mono overflow-hidden whitespace-pre-wrap border border-slate-800/80">
+                                        {{ critic.relationships }}</div>
+
+                                    <p class="text-slate-300 font-bold tracking-wider mt-2">Persona (System Prompt):
+                                    </p>
+                                    <div
+                                        class="bg-slate-950 text-slate-400 p-2.5 rounded text-[11px] font-mono overflow-auto max-h-48 whitespace-pre-wrap border border-slate-800/80">
+                                        {{ critic.persona_prompt }}</div>
+                                </div>
+                            </div>
+                        </transition-group>
+                        <div v-if="critics.length === 0" class="text-sm text-slate-500 italic">Zatím žádní kritici.
+                            Spusťte Init Databázi nahoře.</div>
+                    </div>
+                </div>
+
+                <!-- 4. Seznam Čtenářů -->
+                <div class="bg-slate-900 shadow-lg shadow-black/50 rounded-lg p-5 border border-slate-800 mt-8">
+                    <h2 class="text-lg font-bold mb-4 text-slate-200 border-b border-slate-700 pb-2">Naši Čtenáři
+                        (Evoluce)</h2>
+                    <div class="space-y-4">
+                        <transition-group name="list" tag="div" class="space-y-4">
+                            <div v-for="reader in readers" :key="reader.id"
+                                class="p-4 border border-amber-500/30 rounded-lg cursor-pointer transition-all duration-300 transform hover:-translate-y-1 hover:shadow-xl relative overflow-hidden bg-slate-900"
+                                style="box-shadow: 0 0 10px rgba(245, 158, 11, 0.2);"
+                                @click="activeAuthor === 'r'+reader.id ? activeAuthor = null : activeAuthor = 'r'+reader.id">
+
+                                <div
+                                    class="absolute inset-0 opacity-10 pointer-events-none bg-gradient-to-r from-amber-600 to-transparent">
+                                </div>
+
+                                <div class="flex flex-col gap-2 relative z-10">
+                                    <!-- STAV ČINNOSTI NA PRVNÍM MÍSTĚ -->
+                                    <div v-show="orchestratorState.readers && orchestratorState.readers[reader.id]"
+                                        class="text-[10px] font-bold text-slate-200 bg-amber-900/80 px-2 py-0.5 rounded w-full border border-amber-500/50 uppercase tracking-tighter shadow-inner"
+                                        title="Aktuální činnost čtenáře">
+                                        {{ orchestratorState.readers[reader.id] }}
+                                    </div>
+                                    <div class="flex flex-col items-start gap-1">
+                                        <span class="font-bold text-slate-100 text-[15px] drop-shadow-md">{{
+                                            reader.name
+                                            }}</span>
+                                        <div class="flex items-center space-x-1 mt-1">
+                                            <span
+                                                class="bg-amber-900/50 text-amber-300 text-[9px] px-2 py-0.5 rounded font-bold uppercase border border-amber-500/50 tracking-wider">
+                                                ČTENÁŘ
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div v-if="activeAuthor && activeAuthor === 'r'+reader.id"
+                                    class="mt-4 pt-4 border-t border-slate-700/50 text-xs text-slate-400 space-y-3 relative z-10 transition-all">
+
+                                    <p class="text-emerald-400 font-bold tracking-wider">Znalosti a Preference:</p>
+                                    <div
+                                        class="bg-slate-950 text-emerald-300/80 p-2.5 rounded text-[11px] font-mono overflow-hidden whitespace-pre-wrap border border-slate-800/80">
+                                        {{ reader.knowledge_base }}</div>
+                                    <p class="text-indigo-400 font-bold tracking-wider mt-2">Vztahy a paměť:</p>
+                                    <div
+                                        class="bg-slate-950 text-indigo-300/80 p-2.5 rounded text-[11px] font-mono overflow-hidden whitespace-pre-wrap border border-slate-800/80">
+                                        {{ reader.relationships }}</div>
+
+                                    <p class="text-slate-300 font-bold tracking-wider mt-2">Persona (System Prompt):
+                                    </p>
+                                    <div
+                                        class="bg-slate-950 text-slate-400 p-2.5 rounded text-[11px] font-mono overflow-auto max-h-48 whitespace-pre-wrap border border-slate-800/80">
+                                        {{ reader.persona_prompt }}</div>
+                                </div>
+                            </div>
+                        </transition-group>
+                        <div v-if="readers.length === 0" class="text-sm text-slate-500 italic">Zatím žádní čtenáři.
+                            Spusťte Init Databázi nahoře.</div>
+                    </div>
+                </div>
+
+                <!-- 5. Seznam Světů a Biblí -->
+                <div class="bg-slate-900 shadow-lg shadow-black/50 rounded-lg p-5 border border-slate-800 mt-8">
+                    <h2 class="text-lg font-bold mb-4 text-slate-200 border-b border-slate-700 pb-2">Kánony Světů
+                        (Bible)</h2>
+                    <div class="space-y-4">
+                        <transition-group name="list" tag="div" class="space-y-4">
+                            <div v-for="world in worlds" :key="world.id"
+                                class="p-4 border rounded-lg cursor-pointer transition-all duration-300 transform hover:-translate-y-1 hover:shadow-xl bg-slate-900"
+                                @click="activeAuthor === 'w'+world.id ? activeAuthor = null : activeAuthor = 'w'+world.id"
+                                :class="{'border-blue-500/80 bg-blue-900/20 shadow-[0_0_15px_rgba(59,130,246,0.3)]': world.is_original, 'border-slate-700': !world.is_original}">
+
+                                <div class="flex flex-col gap-2">
+                                    <div class="flex flex-col items-start gap-1">
+                                        <div class="flex justify-between w-full">
+                                            <span class="font-bold text-slate-100 text-[15px] drop-shadow-md">{{
+                                                world.name }}</span>
+                                            <span v-if="world.is_original"
+                                                class="text-[10px] text-blue-300 bg-blue-900/50 border border-blue-500/50 px-2 py-0.5 rounded font-bold ml-2 shadow-[0_0_5px_rgba(59,130,246,0.5)]">HLAVNÍ
+                                                KÁNON</span>
+                                        </div>
+                                        <div class="flex items-center space-x-1 mt-1">
+                                            <span
+                                                :class="{'bg-purple-900/50 text-purple-300 border-purple-500/50': world.category === 'fantasy', 'bg-emerald-900/50 text-emerald-300 border-emerald-500/50': world.category === 'scifi'}"
+                                                class="text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-wider border">
+                                                {{ world.category }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div v-if="activeAuthor && activeAuthor === 'w'+world.id"
+                                    class="mt-4 pt-4 border-t border-slate-700/50 text-xs text-slate-400 space-y-3 transition-all">
+                                    <p class="text-amber-400 font-bold tracking-wider">Pravidla světa (Bible):</p>
+                                    <div
+                                        class="bg-slate-950 text-amber-300/80 p-2.5 rounded text-[12px] font-mono overflow-auto whitespace-pre-wrap border border-slate-800/80 shadow-inner">
+                                        {{ world.bible_md }}</div>
+                                </div>
+                            </div>
+                        </transition-group>
+                        <div v-if="worlds.length === 0" class="text-sm text-slate-500 italic">Zatím žádné světy.
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Pravý sloupec: Přehled povídek a recenzí -->
+            <div class="space-y-8 lg:col-span-8 overflow-y-auto pr-2 pb-4 no-scrollbar">
+
+                <div class="bg-slate-900 shadow-lg shadow-black/50 rounded-lg p-5 border border-slate-800">
+                    <div class="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
+                        <h2 class="text-xl font-bold text-slate-200">Kronika Arény (Napsané Příběhy)</h2>
+                        <button @click="fetchData"
+                            class="text-sm text-blue-400 hover:text-blue-300 hover:underline">Znovu načíst
+                            data</button>
+                    </div>
+
+                    <div v-if="stories.length === 0" class="text-center py-10 text-slate-500 font-mono">
+                        [ Záznamy historie zatím neobsahují žádná data z kol ]
+                    </div>
+
+                    <div v-else class="space-y-6">
+                        <transition-group name="list" tag="div" class="space-y-6">
+                            <div v-for="story in stories.slice().reverse()" :key="story.id"
+                                class="border border-slate-700 rounded-lg overflow-hidden bg-slate-950 shadow-lg">
+                                <!-- Hlavička povídky -->
+                                <div class="bg-slate-800 px-4 py-3 flex justify-between items-center cursor-pointer hover:bg-slate-700 transition"
+                                    @click="toggleStory(story.id)">
+                                    <div>
+                                        <span
+                                            class="text-xs font-bold text-slate-400 uppercase tracking-wider mr-2 bg-slate-900 px-2 py-1 rounded">Kolo
+                                            {{ story.round }}</span>
+                                        <span class="font-bold text-slate-200 text-lg drop-shadow-sm">{{ story.title
+                                            }}</span>
+                                    </div>
+                                    <div class="text-sm text-slate-400 text-right">
+                                        <span class="font-bold text-slate-300">{{ getAuthorName(story.author_id)
+                                            }}</span> <br>
+                                        <span class="text-[10px] uppercase text-slate-500">Svět: {{ story.world_id
+                                            }}</span>
+                                        <svg class="w-4 h-4 inline-block ml-1 text-slate-500" fill="none"
+                                            stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M19 9l-7 7-7-7"></path>
+                                        </svg>
+                                    </div>
+                                </div>
+
+                                <!-- Obsah povídky a recenze -->
+                                <div v-if="activeStoryId === story.id"
+                                    class="px-5 py-5 border-t border-slate-700 bg-slate-900">
+
+                                    <!-- Tab navigace -->
+                                    <div class="flex border-b border-slate-700 mb-6 overflow-x-auto no-scrollbar">
+                                        <button @click="activeTab = 'story'"
+                                            :class="{'border-b-2 border-blue-500 text-blue-400 bg-slate-800/50': activeTab === 'story', 'text-slate-400 hover:text-blue-400 hover:bg-slate-800/30': activeTab !== 'story'}"
+                                            class="px-4 py-3 text-sm font-bold transition-colors whitespace-nowrap rounded-t-lg">Text
+                                            povídky</button>
+
+                                        <button @click="activeTab = 'prompts'"
+                                            :class="{'border-b-2 border-purple-500 text-purple-400 bg-slate-800/50': activeTab === 'prompts', 'text-slate-400 hover:text-purple-400 hover:bg-slate-800/30': activeTab !== 'prompts'}"
+                                            class="px-4 py-3 text-sm font-bold transition-colors whitespace-nowrap rounded-t-lg">⚙️
+                                            Kontext a Prompty</button>
+
+                                        <button @click="activeTab = 'reviews'"
+                                            :class="{'border-b-2 border-rose-500 text-rose-400 bg-slate-800/50': activeTab === 'reviews', 'text-slate-400 hover:text-rose-400 hover:bg-slate-800/30': activeTab !== 'reviews'}"
+                                            class="px-4 py-3 text-sm font-bold transition-colors whitespace-nowrap rounded-t-lg">Soud
+                                            Kritiků ({{ getStoryReviews(story.id).length }})</button>
+
+                                        <button @click="activeTab = 'reader_reviews'"
+                                            :class="{'border-b-2 border-amber-500 text-amber-400 bg-slate-800/50': activeTab === 'reader_reviews', 'text-slate-400 hover:text-amber-400 hover:bg-slate-800/30': activeTab !== 'reader_reviews'}"
+                                            class="px-4 py-3 text-sm font-bold transition-colors whitespace-nowrap rounded-t-lg">Hlas
+                                            Lidu ({{ getStoryReaderReviews(story.id).length }})</button>
+                                    </div>
+
+                                    <!-- Zobrazení povídky -->
+                                    <div v-if="activeTab === 'story'" class="prose prose-sm prose-invert max-w-none">
+                                        <p
+                                            class="text-xs text-slate-500 mb-6 uppercase tracking-widest border-b border-slate-800 pb-2">
+                                            -- Datový záznam povídky --</p>
+                                        <div
+                                            class="whitespace-pre-wrap text-slate-300 font-serif leading-relaxed text-[15px]">
+                                            {{ getStoryTextFixer(story) }}
+                                        </div>
+                                    </div>
+
+                                    <!-- Zobrazení Promptů a DB historie -->
+                                    <div v-if="activeTab === 'prompts'" class="space-y-6">
+                                        <div
+                                            class="bg-slate-950 border border-slate-700 rounded-lg p-5 relative overflow-hidden">
+                                            <div class="absolute top-0 left-0 w-1 h-full bg-purple-500"></div>
+                                            <h4
+                                                class="text-purple-400 font-bold tracking-widest uppercase text-xs mb-3 border-b border-slate-800 pb-2">
+                                                Archivovaná Persona a Pravidla (System)</h4>
+                                            <div
+                                                class="text-[11px] text-slate-400 font-mono whitespace-pre-wrap bg-black/40 p-3 rounded shadow-inner">
+                                                {{ story.system_prompt || 'Záznam není k dispozici (stará verze)' }}
+                                            </div>
+                                        </div>
+
+                                        <div
+                                            class="bg-slate-950 border border-slate-700 rounded-lg p-5 relative overflow-hidden">
+                                            <div class="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
+                                            <h4
+                                                class="text-blue-400 font-bold tracking-widest uppercase text-xs mb-3 border-b border-slate-800 pb-2">
+                                                Interní Paměť a Znalosti (Před startem psaní)</h4>
+                                            <p class="text-[10px] text-slate-500 font-mono mb-1">Knowledge Base:</p>
+                                            <div
+                                                class="text-[11px] text-emerald-400/80 font-mono whitespace-pre-wrap bg-black/40 p-3 rounded mb-3 shadow-inner">
+                                                {{ story.knowledge_base || 'Bez záznamu' }}
+                                            </div>
+                                            <p class="text-[10px] text-slate-500 font-mono mb-1">Local Bible / Lore:
+                                            </p>
+                                            <div
+                                                class="text-[11px] text-amber-500/80 font-mono whitespace-pre-wrap bg-black/40 p-3 rounded shadow-inner">
+                                                {{ story.local_bible || 'Bez záznamu' }}
+                                            </div>
+                                        </div>
+
+                                        <div
+                                            class="bg-slate-950 border border-slate-700 rounded-lg p-5 relative overflow-hidden">
+                                            <div class="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
+                                            <h4
+                                                class="text-emerald-400 font-bold tracking-widest uppercase text-xs mb-3 border-b border-slate-800 pb-2">
+                                                Dynamické Zadání (User Request)</h4>
+                                            <div
+                                                class="text-[11px] text-slate-300 font-mono whitespace-pre-wrap bg-black/40 p-3 rounded shadow-inner">
+                                                {{ story.user_prompt || 'Záznam není k dispozici (stará verze)' }}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Zobrazení recenzí -->
+                                    <div v-if="activeTab === 'reviews'" class="space-y-6">
+                                        <div v-if="getStoryReviews(story.id).length === 0"
+                                            class="text-sm text-slate-500 font-mono">
+                                            > Systém čeká na vyjádření kritických modelů...
+                                        </div>
+
+                                        <div v-for="review in getStoryReviews(story.id)" :key="review.id"
+                                            class="bg-slate-950 border border-slate-800 rounded-lg p-5 shadow-lg relative glow-critic">
+                                            <div
+                                                class="absolute top-0 right-0 w-2 h-2 bg-rose-500 m-2 rounded-full animate-pulse">
+                                            </div>
+
+                                            <h4 class="font-black text-sm text-rose-300 mb-3 tracking-wide uppercase">
+                                                {{
+                                                getCriticName(review.critic_id) }}</h4>
+
+                                            <!-- Skóre badge -->
+                                            <div
+                                                class="flex flex-wrap gap-2 mb-4 bg-slate-900/50 p-2 rounded border border-slate-800">
+                                                <span v-for="(val, key) in parseScores(review.scores_json)" :key="key"
+                                                    class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase"
+                                                    :class="getScoreColor(val)">
+                                                    {{ key }}: {{ val }}/10
+                                                </span>
+                                            </div>
+
+                                            <div
+                                                class="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed py-2">
+                                                {{ review.review_md }}
+                                            </div>
+
+                                            <!-- Debata: Rebuttal & Final -->
+                                            <div v-if="review.author_rebuttal || review.critic_final_response"
+                                                class="mt-6 pt-5 border-t border-slate-800 space-y-4">
+                                                <div v-if="review.author_rebuttal"
+                                                    class="bg-blue-950/30 border-l-[3px] border-blue-500 p-4 relative">
+                                                    <strong
+                                                        class="text-blue-400 text-xs uppercase tracking-widest block mb-2 flex items-center">
+                                                        > INTERCOM: Obhajoba Autora
+                                                    </strong>
+                                                    <div
+                                                        class="text-sm text-blue-200 whitespace-pre-wrap italic leading-relaxed text-[13px]">
+                                                        "{{ review.author_rebuttal }}"
+                                                    </div>
+                                                </div>
+                                                <div v-if="review.critic_final_response"
+                                                    class="bg-rose-950/30 border-l-[3px] border-rose-500 p-4 relative">
+                                                    <strong
+                                                        class="text-rose-400 text-xs uppercase tracking-widest block mb-2 flex items-center">
+                                                        > SYSTEM OVERRIDE: Verdikt Kritika
+                                                    </strong>
+                                                    <div
+                                                        class="text-sm text-rose-200 whitespace-pre-wrap leading-relaxed text-[13px]">
+                                                        {{ review.critic_final_response }}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Zobrazení čtenářských ohlasů -->
+                                    <div v-if="activeTab === 'reader_reviews'" class="space-y-6">
+                                        <div v-if="getStoryReaderReviews(story.id).length === 0"
+                                            class="text-sm text-slate-500 font-mono">
+                                            > Čekáme na doručení dat z populace čtenářů...
+                                        </div>
+
+                                        <div v-for="rreview in getStoryReaderReviews(story.id)" :key="rreview.id"
+                                            class="bg-slate-950 border border-slate-800 rounded-lg p-5 shadow-lg relative glow-fantasy">
+
+                                            <h4
+                                                class="font-black text-sm text-amber-400 mb-4 flex items-center uppercase tracking-wider">
+                                                {{ getReaderName(rreview.reader_id) }}
+                                            </h4>
+
+                                            <p
+                                                class="text-[10px] text-amber-500/80 font-bold uppercase tracking-widest mb-2 px-3 py-1 bg-amber-900/20 inline-block rounded">
+                                                Komentář populace</p>
+                                            <div
+                                                class="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed mb-6 pl-2 border-l-2 border-amber-900/50">
+                                                {{ rreview.review_md }}
+                                            </div>
+
+                                            <div v-if="rreview.proposed_story_md">
+                                                <p
+                                                    class="text-[10px] text-emerald-500/80 font-bold uppercase tracking-widest mb-2 pt-4 border-t border-slate-800 px-3 py-1 bg-emerald-900/20 rounded inline-block">
+                                                    Vývojová abstrakce (Co mělo být)</p>
+                                                <div
+                                                    class="text-sm text-emerald-200/80 bg-slate-900 p-4 rounded whitespace-pre-wrap leading-relaxed shadow-inner border border-slate-800">
+                                                    {{ rreview.proposed_story_md }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+                        </transition-group>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted, watch, nextTick } = Vue;
+
+        createApp({
+            setup() {
+                const authors = ref([]);
+                const serverLogs = ref([{ id: 1, time: new Date().toLocaleTimeString('cs-CZ'), msg: "SYSTEM INIT... STANDBY FOR AGENT HOOKS" }]);
+                const logContainer = ref(null);
+                const critics = ref([]);
+                const readers = ref([]);
+                const worlds = ref([]); // Added worlds ref
+                const stories = ref([]);
+                const reviews = ref([]);
+                const reader_reviews = ref([]);
+                const isRunning = ref(false);
+
+                const form = ref({
+                    num_rounds: 1
+                });
+
+                const activeAuthor = ref(null);
+                const activeStoryId = ref(null);
+                const activeTab = ref('story');
+
+                const orchestratorState = ref({ is_running: false, authors: {}, critics: {}, readers: {} });
+
+                const fetchData = async () => {
+                    try {
+                        const [authRes, critRes, readRes, worldRes, stRes, revRes, rrevRes] = await Promise.all([
+                            fetch('/api/authors'),
+                            fetch('/api/critics'),
+                            fetch('/api/readers'),
+                            fetch('/api/worlds'), // Added fetch for worlds
+                            fetch('/api/stories'),
+                            fetch('/api/reviews'),
+                            fetch('/api/reader-reviews')
+                        ]);
+                        authors.value = await authRes.json();
+                        critics.value = await critRes.json();
+                        readers.value = await readRes.json();
+                        worlds.value = await worldRes.json(); // Assign worlds data
+                        stories.value = await stRes.json();
+                        reviews.value = await revRes.json();
+                        reader_reviews.value = await rrevRes.json();
+                    } catch (e) {
+                        console.error("Chyba při načítání dat:", e);
+                    }
+                };
+
+                const fetchStatus = async () => {
+                    try {
+                        const res = await fetch('/api/status');
+                        orchestratorState.value = await res.json();
+                    } catch (e) { }
+                };
+
+                const initReborn = async () => {
+                    if (confirm("Opravdu inicializovat databázi základními autory?")) {
+                        await fetch('/api/init-db', { method: 'POST' });
+                        fetchData();
+                        alert("Inicializováno!");
+                    }
+                };
+
+                const runRound = async () => {
+                    isRunning.value = true;
+                    try {
+                        const res = await fetch('/api/rounds/run', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(form.value)
+                        });
+                        const data = await res.json();
+                        fetchStatus();
+                    } catch (e) {
+                        alert('Chyba při spouštění.');
+                    }
+                    setTimeout(() => { isRunning.value = false; }, 3000);
+                };
+
+                const getAuthorName = (id) => {
+                    const a = authors.value.find(x => x.id === id);
+                    return a ? a.name : `Neznámý autor (${id})`;
+                };
+
+                const getCriticName = (id) => {
+                    const c = critics.value.find(x => x.id == id);
+                    return c ? c.name : `Kritik (${id})`;
+                };
+
+                const getReaderName = (id) => {
+                    const r = readers.value.find(x => x.id == id);
+                    return r ? r.name : `Čtenář (${id})`;
+                };
+
+                const toggleStory = async (id) => {
+                    if (activeStoryId.value === id) {
+                        activeStoryId.value = null;
+                    } else {
+                        activeStoryId.value = id;
+                        activeTab.value = 'story';
+                    }
+                };
+
+                const getStoryTextFixer = (story) => {
+                    return story.text_md || "(Text povídky není k dispozici - je potřeba otevřít upravit endpoint /api/stories aby vracel text_md, pokud ho nevrací.)";
+                };
+
+                const getStoryReviews = (storyId) => {
+                    return reviews.value.filter(r => r.story_id == storyId);
+                };
+
+                const getStoryReaderReviews = (storyId) => {
+                    return reader_reviews.value.filter(r => r.story_id == storyId);
+                };
+
+                const parseScores = (jsonStr) => {
+                    try {
+                        return JSON.parse(jsonStr);
+                    } catch (e) { return {}; }
+                };
+
+                const getScoreColor = (score) => {
+                    if (score >= 8) return 'bg-green-100 text-green-800';
+                    if (score >= 5) return 'bg-yellow-100 text-yellow-800';
+                    return 'bg-red-100 text-red-800';
+                };
+
+                onMounted(() => {
+                    fetchData();
+                    fetchStatus();
+                    // Polling pro tvrdá data každých 15 sekund
+                    setInterval(fetchData, 15000);
+                    // Rychlý polling pro soft state (live postup spisovatelů) každé 2s
+                    setInterval(fetchStatus, 2000);
+                });
+
+                // Sledujeme změny state a zapisujeme do matrix konzole
+                // Tím vzniká dojem live logování přímo na klientovi
+                watch(orchestratorState, async (newState, oldState) => {
+                    const now = new Date().toLocaleTimeString('cs-CZ', { hour12: false });
+                    let added = false;
+
+                    const safeOld = oldState || {};
+
+                    // Zkontrolujeme autory
+                    if (newState.authors) {
+                        for (const [id, msg] of Object.entries(newState.authors)) {
+                            if (!safeOld.authors || safeOld.authors[id] !== msg) {
+                                serverLogs.value.push({ id: Date.now() + Math.random(), time: now, msg: `[AUTH ${id}] > ${msg}` });
+                                added = true;
+                            }
+                        }
+                    }
+                    // Zkontrolujeme kritiky
+                    if (newState.critics) {
+                        for (const [id, msg] of Object.entries(newState.critics)) {
+                            if (!safeOld.critics || safeOld.critics[id] !== msg) {
+                                serverLogs.value.push({ id: Date.now() + Math.random(), time: now, msg: `[CRIT ${id}] > ${msg}` });
+                                added = true;
+                            }
+                        }
+                    }
+                    // Zkontrolujeme čtenáře
+                    if (newState.readers) {
+                        for (const [id, msg] of Object.entries(newState.readers)) {
+                            if (!safeOld.readers || safeOld.readers[id] !== msg) {
+                                serverLogs.value.push({ id: Date.now() + Math.random(), time: now, msg: `[READ ${id}] > ${msg}` });
+                                added = true;
+                            }
+                        }
+                    }
+
+                    if (added) {
+                        // Keep only last 50 logs
+                        if (serverLogs.value.length > 50) serverLogs.value.shift();
+
+                        await nextTick();
+                        if (logContainer.value) {
+                            logContainer.value.scrollTop = logContainer.value.scrollHeight;
+                        }
+                    }
+                }, { deep: true });
+
+                return {
+                    authors, critics, readers, worlds, stories, reviews, reader_reviews, isRunning, form, orchestratorState,
+                    activeAuthor, activeStoryId, activeTab, serverLogs, logContainer,
+                    initReborn, runRound, fetchData, getAuthorName, getCriticName, getReaderName,
+                    toggleStory, getStoryReviews, getStoryReaderReviews, parseScores, getScoreColor,
+                    getStoryTextFixer
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="cs">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BookClaw - Graf Vztahů</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            min-height: 100vh;
+        }
+
+        #cy {
+            width: 100%;
+            height: 700px;
+            display: block;
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            border-radius: 1rem;
+        }
+
+        .sentiment-badge {
+            font-size: 0.65rem;
+            padding: 0.1rem 0.4rem;
+            border-radius: 9999px;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        /* Animace pro hrany při najetí */
+        .edge-hover {
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+
+<body class="p-4 md:p-8">
+    <div id="app" class="max-w-7xl mx-auto">
+        <header class="mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h1 class="text-4xl font-extrabold text-slate-900 tracking-tight">Klub Rváčů & Přátel</h1>
+                <p class="text-slate-600 text-lg font-medium opacity-80">Mapa vřelosti, averze a respektu v literární
+                    aréně</p>
+            </div>
+            <a href="/static/index.html"
+                class="inline-flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 font-semibold py-2.5 px-6 rounded-xl border border-slate-200 shadow-sm transition-all hover:shadow-md active:scale-95">
+                <span class="text-xl">🏠</span> Zpět do Arény
+            </a>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <!-- Hlavní graf -->
+            <div class="lg:col-span-9 relative">
+                <div id="cy"></div>
+
+                <!-- Legenda uvnitř grafu -->
+                <div
+                    class="absolute bottom-4 left-4 glass-card p-3 flex flex-wrap gap-4 text-[10px] font-bold tracking-widest text-slate-600 uppercase">
+                    <div class="flex items-center gap-1.5"><span
+                            class="w-2.5 h-2.5 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]"></span>
+                        Autor</div>
+                    <div class="flex items-center gap-1.5"><span class="w-2.5 h-0.5 bg-rose-500 rounded-sm"></span>
+                        Kritik</div>
+                    <div class="flex items-center gap-1.5"><span
+                            class="w-2.5 h-2.5 bg-amber-500 rounded-sm rotate-45"></span>
+                        Čtenář</div>
+                    <div class="flex items-center gap-1.5"><span class="w-4 h-1 rounded-full bg-emerald-400"></span>
+                        Přátelství</div>
+                    <div class="flex items-center gap-1.5"><span class="w-4 h-1 rounded-full bg-rose-400"></span> Averze
+                    </div>
+                    <div class="flex items-center gap-1.5"><span class="w-4 h-0.5 bg-slate-300"></span> Neutrální</div>
+                </div>
+
+                <!-- Přepínače layoutu / Reset zoomu -->
+                <div class="absolute top-4 right-4 flex gap-2">
+                    <button @click="resetView" class="glass-card p-2 hover:bg-white transition-colors"
+                        title="Resetovat pohled">
+                        🎯
+                    </button>
+                    <button @click="refreshLayout" class="glass-card p-2 hover:bg-white transition-colors"
+                        title="Srovnat graf">
+                        🔄
+                    </button>
+                </div>
+            </div>
+
+            <!-- Detailní panel -->
+            <div class="lg:col-span-3 space-y-6">
+                <div class="glass-card p-6 shadow-xl border-t-4 border-t-blue-500 min-h-[250px] transform transition-all duration-500"
+                    :class="selectedNode ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-80'">
+                    <h2
+                        class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex justify-between items-center">
+                        Profil Entity
+                        <span v-if="selectedNode" class="text-[10px] bg-slate-100 px-2 py-0.5 rounded">{{
+                            selectedNode.type }}</span>
+                    </h2>
+
+                    <div v-if="selectedNode">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-inner"
+                                :class="{'bg-blue-100 text-blue-600': selectedNode.type === 'author', 'bg-rose-100 text-rose-600': selectedNode.type === 'critic', 'bg-amber-100 text-amber-600': selectedNode.type === 'reader'}">
+                                {{ selectedNode.type === 'author' ? '✍️' : selectedNode.type === 'critic' ? '🧐' : '📖'
+                                }}
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-xl text-slate-800 leading-tight">{{ selectedNode.name }}</h3>
+                                <p class="text-xs text-slate-500 font-medium">{{ selectedNode.style || `Literární
+                                    soudce` }}</p>
+                            </div>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div>
+                                <span
+                                    class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Sociální
+                                    paměť</span>
+                                <div
+                                    class="bg-white/50 p-3 rounded-lg text-xs leading-relaxed text-slate-700 italic border border-slate-100 shadow-sm max-h-60 overflow-y-auto">
+                                    {{ selectedNode.relationships || `Ještě se nikoho nenaučil nenávidět ani milovat.`
+                                    }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div v-else class="flex flex-col items-center justify-center py-10 opacity-40">
+                        <div class="text-4xl mb-2">🖱️</div>
+                        <p class="text-xs font-bold uppercase tracking-widest text-center">Klikni na uzel<br>pro detaily
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Statistika Arény -->
+                <div class="glass-card p-5 bg-gradient-to-br from-indigo-50 to-white">
+                    <h3 class="text-xs font-black text-indigo-400 uppercase mb-3">Stav Arény</h3>
+                    <div class="grid grid-cols-2 gap-3 text-center">
+                        <div class="p-2 bg-white rounded-lg shadow-sm border border-indigo-100">
+                            <div class="text-xl font-bold text-indigo-600">{{ authors.length }}</div>
+                            <div class="text-[9px] font-bold uppercase text-slate-400">Autorů</div>
+                        </div>
+                        <div class="p-2 bg-white rounded-lg shadow-sm border border-indigo-100">
+                            <div class="text-xl font-bold text-indigo-600">{{ critics.length }}</div>
+                            <div class="text-[9px] font-bold uppercase text-slate-400">Kritiků</div>
+                        </div>
+                        <div class="p-2 bg-white rounded-lg shadow-sm border border-indigo-100 col-span-2">
+                            <div class="text-xl font-bold text-indigo-600">{{ readers.length }}</div>
+                            <div class="text-[9px] font-bold uppercase text-slate-400">Čtenářů</div>
+                        </div>
+                    </div>
+                    <p class="mt-4 text-[10px] text-indigo-800 font-medium text-center">
+                        Vztahy jsou detekovány ze "Sociální paměti" každého agenta. Šipka ukazuje směr vztahu. Barva pak
+                        vřelost.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const authors = ref([]);
+                const critics = ref([]);
+                const readers = ref([]);
+                const selectedNode = ref(null);
+                let cy = null;
+
+                // Pomocná funkce pro detekci sentimentu (Vřelosti)
+                const detectSentiment = (text, targetName) => {
+                    const positive = ['přítel', 'respekt', 'obdiv', 'pochvala', 'líbí', 'skvělé', 'partner', 'spolupráce', 'důvěra', 'kamarád', 'pozitivní', 'konstruktivní', 'sympati', 'vylepš'];
+                    const negative = ['nenávist', 'odpor', 'averze', 'kritika', 'špatné', 'pohrdání', 'blacklist', 'nepřítel', 'konflikt', 'příliš', 'arogance', 'nekonstruktivní', 'porušuje'];
+
+                    const lowerText = text.toLowerCase();
+                    let index = lowerText.indexOf(targetName);
+                    if (index === -1) {
+                        // Fallback pro nestandardní zmínky v textu - bereme prostředek
+                        index = lowerText.length / 2;
+                    }
+
+                    // Výřez textu kolem výskytu (+- 100 znaků) pro kontext věty
+                    const context = lowerText.substring(Math.max(0, index - 100), Math.min(lowerText.length, index + 100));
+
+                    let posScore = positive.filter(w => context.includes(w)).length;
+                    let negScore = negative.filter(w => context.includes(w)).length;
+
+                    if (posScore > negScore) return { score: posScore, type: 'positive' };
+                    if (negScore > posScore) return { score: negScore, type: 'negative' };
+                    return { score: 0, type: 'neutral' };
+                };
+
+                const initGraph = () => {
+                    const elements = [];
+
+                    // Uzly pro autory
+                    authors.value.forEach(a => {
+                        elements.push({
+                            data: {
+                                id: 'a' + a.id,
+                                name: a.name,
+                                type: 'author',
+                                relationships: a.relationships,
+                                style: a.style
+                            }
+                        });
+                    });
+
+                    // Uzly pro kritiky
+                    critics.value.forEach(c => {
+                        elements.push({
+                            data: {
+                                id: 'c' + c.id,
+                                name: c.name,
+                                type: 'critic',
+                                relationships: c.relationships,
+                                role: 'Pravidelný kritik'
+                            }
+                        });
+                    });
+
+                    // Uzly pro čtenáře
+                    readers.value.forEach(r => {
+                        elements.push({
+                            data: {
+                                id: 'r' + r.id,
+                                name: r.name,
+                                type: 'reader',
+                                relationships: r.relationships,
+                                role: 'Knihomol'
+                            }
+                        });
+                    });
+
+                    // Logika pro vazby (edges) s detekcí sentimentu a chytřejším párováním
+                    const allPersonas = [
+                        ...authors.value.map(a => ({ ...a, node_type: 'author' })),
+                        ...critics.value.map(c => ({ ...c, node_type: 'critic' })),
+                        ...readers.value.map(r => ({ ...r, node_type: 'reader' }))
+                    ];
+
+                    allPersonas.forEach(p => {
+                        const prefixMap = { 'author': 'a', 'critic': 'c', 'reader': 'r' };
+                        const sourceId = prefixMap[p.node_type] + p.id;
+                        allPersonas.forEach(target => {
+                            if (p.id === target.id && (p.node_type === target.node_type)) return;
+
+                            const rel = (p.relationships || '').toLowerCase();
+                            const baseTargetName = target.name.split('(')[0].trim().toLowerCase();
+
+                            const tID = target.id;
+                            const tType = target.node_type;
+
+                            let tKwLabel;
+                            if (tType === 'author') tKwLabel = 'autor';
+                            else if (tType === 'critic') tKwLabel = 'kritik';
+                            else tKwLabel = 'čtenář';
+
+                            // Unikátní podpisy, které agenti používají k oslovení druhých v paměti
+                            const keywords = [
+                                baseTargetName,
+                                tKwLabel + ' ' + tID,
+                                tKwLabel + ' id: ' + tID,
+                                tKwLabel + 'ovi id: ' + tID,
+                                (tType === 'author' ? 'spisovatel' : tType === 'critic' ? 'critic' : 'reader') + ' ' + tID,
+                                tKwLabel + (tType === 'author' ? 'em' : tType === 'critic' ? 'em' : 'em') + ' č.' + tID,
+                                'user_id=' + tID
+                            ];
+
+                            const match = keywords.some(kw => rel.includes(kw));
+
+                            if (match) {
+                                const targetId = prefixMap[tType] + target.id;
+                                const sentiment = detectSentiment(p.relationships, baseTargetName);
+
+                                elements.push({
+                                    data: {
+                                        id: `e-${sourceId}-${targetId}`,
+                                        source: sourceId,
+                                        target: targetId,
+                                        sentiment: sentiment.type,
+                                        weight: 2 + sentiment.score
+                                    }
+                                });
+                            }
+                        });
+                    });
+
+                    cy = cytoscape({
+                        container: document.getElementById('cy'),
+                        elements: elements,
+                        boxSelectionEnabled: false,
+                        autounselectify: false,
+                        style: [
+                            {
+                                selector: 'node',
+                                style: {
+                                    'label': 'data(name)',
+                                    'text-valign': 'bottom',
+                                    'text-margin-y': 8,
+                                    'color': '#334155',
+                                    'font-family': 'Inter',
+                                    'font-weight': 'bold',
+                                    'font-size': '10px',
+                                    'width': '45px',
+                                    'height': '45px',
+                                    'border-width': 3,
+                                    'border-color': 'rgba(255,255,255,0.8)',
+                                    'transition-property': 'background-color, border-color, width, height',
+                                    'transition-duration': '0.3s'
+                                }
+                            },
+                            {
+                                selector: 'node[type="author"]',
+                                style: {
+                                    'background-color': '#3b82f6',
+                                    'shape': 'ellipse',
+                                    'background-image': 'https://img.icons8.com/ios-filled/50/ffffff/fountain-pen.png', // Placeholder icon
+                                    'background-fit': 'contain',
+                                    'background-image-opacity': 0.2
+                                }
+                            },
+                            {
+                                selector: 'node[type="critic"]',
+                                style: {
+                                    'background-color': '#f43f5e',
+                                    'background-image': 'https://img.icons8.com/ios-filled/50/ffffff/scales.png',
+                                    'background-image-opacity': 0.2,
+                                    'shape': 'round-rectangle'
+                                }
+                            },
+                            {
+                                selector: 'node[type="reader"]',
+                                style: {
+                                    'background-color': '#f59e0b',
+                                    'background-image': 'https://img.icons8.com/ios-filled/50/ffffff/open-book.png',
+                                    'background-image-opacity': 0.2,
+                                    'shape': 'diamond'
+                                }
+                            },
+                            {
+                                selector: 'edge',
+                                style: {
+                                    'width': 'data(weight)',
+                                    'line-color': '#cbd5e1',
+                                    'target-arrow-color': '#cbd5e1',
+                                    'target-arrow-shape': 'triangle',
+                                    'curve-style': 'bezier',
+                                    'arrow-scale': 1.2,
+                                    'opacity': 0.6,
+                                    'transition-property': 'line-color, opacity, width',
+                                    'transition-duration': '0.3s'
+                                }
+                            },
+                            {
+                                selector: 'edge[sentiment="positive"]',
+                                style: {
+                                    'line-color': '#10b981',
+                                    'target-arrow-color': '#10b981',
+                                    'opacity': 0.8
+                                }
+                            },
+                            {
+                                selector: 'edge[sentiment="negative"]',
+                                style: {
+                                    'line-color': '#ef4444',
+                                    'target-arrow-color': '#ef4444',
+                                    'opacity': 0.9
+                                }
+                            },
+                            {
+                                selector: 'node:selected',
+                                style: {
+                                    'border-color': '#475569',
+                                    'border-width': 5,
+                                    'width': '55px',
+                                    'height': '55px'
+                                }
+                            }
+                        ],
+                        layout: {
+                            name: 'cose',
+                            padding: 80,
+                            animate: true,
+                            nodeRepulsion: 4500,
+                            idealEdgeLength: 120,
+                        }
+                    });
+
+                    cy.on('tap', 'node', function (evt) {
+                        selectedNode.value = evt.target.data();
+                    });
+
+                    cy.on('tap', 'edge', function (evt) {
+                        // Možná přidat detail vztahu?
+                    });
+                };
+
+                const resetView = () => { if (cy) cy.fit(); };
+                const refreshLayout = () => { if (cy) cy.layout({ name: 'cose', animate: true }).run(); };
+
+                onMounted(async () => {
+                    try {
+                        const [authRes, critRes, readRes] = await Promise.all([
+                            fetch('/api/authors'),
+                            fetch('/api/critics'),
+                            fetch('/api/readers')
+                        ]);
+                        authors.value = await authRes.json();
+                        critics.value = await critRes.json();
+                        readers.value = await readRes.json();
+                        initGraph();
+                    } catch (e) {
+                        console.error("Chyba při inicializaci grafu:", e);
+                    }
+                });
+
+                return { selectedNode, authors, critics, readers, resetView, refreshLayout };
+            }
+        }).mount('#app');
+    </script>
+</body>
+
+</html>
