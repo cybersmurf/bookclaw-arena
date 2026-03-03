@@ -154,6 +154,7 @@ def get_reviews(story_id: int = None, db: Session = Depends(get_db)):
             "review_md": r.review_md,
             "author_rebuttal": r.author_rebuttal,
             "critic_final_response": r.critic_final_response,
+            "discussion_json": r.discussion_json,
             "created_at": str(r.created_at)
         })
     return res

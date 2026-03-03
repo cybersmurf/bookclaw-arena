@@ -410,7 +410,16 @@ async def _reflection_task(client, semaphore, author, latest_story, reviews, are
         state.author_statuses[author.id] = "🧠 Aktualizuje osnovu a lokální bibli..."
         try:
             system_prompt = "Jsi spisovatel. Vracíš POUZE platný JSON obsahující tvůj aktualizovaný vnitřní manuál 'persona_prompt', 'knowledge_base', 'relationships' a zejména 'local_bible' (tvé nové poznatky o loru, které jsi v příběhu vytvořil) a případně upravenou 'novel_outline'. ODPOVÍDEJ VÝHRADNĚ V ČEŠTINĚ! ŽÁDNÁ ČÍNŠTINA NENÍ POVOLENA!"
-            reviews_text = "".join([f"\n--- Kritik {r.critic_id} ---\nSkóre: {r.scores_json}\nText: {r.review_md}\n" for r in reviews])
+            reviews_text = ""
+            for r in reviews:
+                discussion = ""
+                try:
+                    disc_list = json.loads(r.discussion_json or "[]")
+                    for d in disc_list:
+                        role = "Kritik" if d["role"] == "critic" else "Ty (Spisovatel)"
+                        discussion += f"\n{role}: {d['text']}"
+                except: pass
+                reviews_text += f"\n--- Kritik {r.critic_id} ---\nSkóre: {r.scores_json}\nText: {r.review_md}\nPrůběh hádky:{discussion}\n"
             user_prompt = f"""Tvá povídka: {latest_story.title}\nRecenze: {reviews_text}\nShrnutí arény: {arena_summary}\n\nTvé stávající údaje:\nLocal Bible (Lore): {author.local_bible}\nOsnova: {author.novel_outline}\n\nNa základě zpětné vazby aktualizuj svůj styl, vztahy a hlavně si zapiš do 'local_bible' nové postavy/místa, které jsi v tomto kole vymyslel, aby byly v příštím kole konzistentní."""
             
             schema = {
@@ -440,7 +449,16 @@ async def _critic_reflection_task(client, semaphore, critic, reviews_made, arena
         state.critic_statuses[critic.id] = f"🧠 Přemýšlí nad svými radami a aktualizuje blacklist..."
         try:
             system_prompt = "Jsi literární kritik. Vracíš POUZE platný JSON obsahující tvůj aktualizovaný vnitřní 'persona_prompt', nové znalosti o fungování světa z povídek a aktualizované vztahy či blacklist k autorům/kolegům. ODPOVÍDEJ VÝHRADNĚ V ČEŠTINĚ! ŽÁDNÁ ČÍNŠTINA NENÍ POVOLENA!"
-            reviews_text = "".join([f"\n--- Recenze {r.id} ---\nSkóre: {r.scores_json}\nText: {r.review_md}\nObhajoba autora: {r.author_rebuttal}\nTvůj finální verdikt: {r.critic_final_response}\n" for r in reviews_made])
+            reviews_text = ""
+            for r in reviews_made:
+                discussion = ""
+                try:
+                    disc_list = json.loads(r.discussion_json or "[]")
+                    for d in disc_list:
+                        role = "Ty (Kritik)" if d["role"] == "critic" else "Autor"
+                        discussion += f"\n{role}: {d['text']}"
+                except: pass
+                reviews_text += f"\n--- Recenze {r.id} ---\nSkóre: {r.scores_json}\nText: {r.review_md}\nPrůběh hádky (Ty vs Autor):{discussion}\n"
             user_prompt = f"Tvůj stávající manuál:\n{critic.persona_prompt}\nTvé stávající znalosti loru:\n{critic.knowledge_base}\nTvé stávající vztahy:\n{critic.relationships}\n\nTvé interakce (hádkání s autory):\n{reviews_text}\n\nSHRNUTÍ DĚNÍ V ARÉNĚ OSTATNÍCH:\n{arena_summary}\n\nVygeneruj JSON s aktualizovanými poli."
             schema = _build_reflection_schema()
             new_data = await _call_ollama_async(client, OLLAMA_MODEL, system_prompt, user_prompt, temperature=0.6, output_schema=schema)
@@ -555,7 +573,13 @@ async def run_round_orchestration_async(start_round_num: int, num_rounds: int = 
                     arena_summary += f"\n--- Povídka: {s.title} (Autor ID: {s.author_id}) ---\n"
                     reves = [r for r in valid_reviews if r.story_id == s.id]
                     for r in reves:
-                        arena_summary += f"- Kritik {r.critic_id} skóre: {r.scores_json}. Finální verdikt: {r.critic_final_response}\n"
+                        final_verdict = ""
+                        try:
+                            disc_list = json.loads(r.discussion_json or "[]")
+                            if disc_list and disc_list[-1]["role"] == "critic":
+                                final_verdict = disc_list[-1]["text"]
+                        except: pass
+                        arena_summary += f"- Kritik {r.critic_id} skóre: {r.scores_json}. Poslední slovo kritika: {final_verdict}\n"
                     r_reves = [rr for rr in valid_reader_reviews if rr.story_id == s.id]
                     for rr in r_reves:
                         arena_summary += f"- Čtenář {rr.reader_id} říká: {rr.review_md}\n"
