@@ -286,7 +286,13 @@ async def _critic_task(client, semaphore, db, story, author, critic, existing_re
             peer_reviews_md = ""
             if existing_reviews:
                 for peer in existing_reviews:
-                    peer_reviews_md += f"- Kritik {peer.critic_id} dal skóre: {peer.scores_json}. Výtka: {json.loads(peer.scores_json).get('critique', peer.review_md[:50])}\n"
+                    vytka = peer.review_md[:50] + "..." if peer.review_md else "Bez komentáře"
+                    try:
+                        parsed_scores = json.loads(peer.scores_json)
+                        vytka = parsed_scores.get('critique', vytka)
+                    except:
+                        pass
+                    peer_reviews_md += f"- Kritik {peer.critic_id} dal skóre: {peer.scores_json}. Výtka: {vytka}\n"
 
             user_prompt = textwrap.dedent(f"""
                 **PŮVODNÍ BIBLE SVĚTA (Kánon):**
