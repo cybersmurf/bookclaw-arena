@@ -238,7 +238,14 @@ async def _reader_task(client, semaphore, db, story, author, reviews, reader):
             reviews_text = ""
             if reviews:
                 for r in reviews:
-                    reviews_text += f"\n--- Kritik ID {r.critic_id} ---\nSkóre: {r.scores_json}\nRecenze: {r.review_md}\nReakce autora: {r.author_rebuttal}\nVerdikt kritika: {r.critic_final_response}\n"
+                    reviews_text += f"\n--- Kritik ID {r.critic_id} ---\nSkóre: {r.scores_json}\nRecenze: {r.review_md}\n"
+                    if r.discussion_json:
+                        try:
+                            history = json.loads(r.discussion_json)
+                            for msg in history:
+                                role_cz = "Spisovatel" if msg['role'] == "author" else "Kritik"
+                                reviews_text += f"{role_cz}: {msg['text']}\n"
+                        except: pass
             
             user_prompt = textwrap.dedent(f"""
                 **Přečti si následující povídku od {author.name}:**
@@ -265,7 +272,7 @@ async def _reader_task(client, semaphore, db, story, author, reviews, reader):
         finally:
             state.reader_statuses[reader.id] = "☕️ Hodnocení dopsáno."
 
-async def _critic_task(client, semaphore, db, story, author, critic):
+async def _critic_task(client, semaphore, db, story, author, critic, existing_reviews=None):
     async with semaphore:
         state.critic_statuses[critic.id] = f"🧐 {OLLAMA_MODEL} čte a hodnotí {author.name}"
         try:
@@ -275,6 +282,12 @@ async def _critic_task(client, semaphore, db, story, author, critic):
             base_prompt = f"Jsi český literární kritik. Hodnotíš povídky žánru {author.genre}. Piš VÝHRADNĚ česky, věcně, s osobností. Vždy vrať platný JSON. ŽÁDNÉ ČÍNSKÉ ZNAKY JSOU ZAKÁZÁNY!"
             system_prompt = base_prompt + "\n\n" + critic.persona_prompt + f"\n\n**Tvé znalosti o loru a světě:**\n{critic.knowledge_base}\n\n**Tvé vztahy k autorům a dalším kritikům:**\n{critic.relationships}"
             
+            # Formátování "Co už k povídce napsali ostatní kritici v tomto kole"
+            peer_reviews_md = ""
+            if existing_reviews:
+                for peer in existing_reviews:
+                    peer_reviews_md += f"- Kritik {peer.critic_id} dal skóre: {peer.scores_json}. Výtka: {json.loads(peer.scores_json).get('critique', peer.review_md[:50])}\n"
+
             user_prompt = textwrap.dedent(f"""
                 **PŮVODNÍ BIBLE SVĚTA (Kánon):**
                 {world.bible_md if world else "Neznámý svět"}
@@ -289,7 +302,12 @@ async def _critic_task(client, semaphore, db, story, author, critic):
                 {story.text_md}
                 --- KONEC TEXTU ---
                 
-                Ohodnoť povídku v češtině. Pokud jsi Lore-master, hlídej rozpor s PŮVODNÍ BIBLÍ. 
+                **Dosavadní hodnocení od ostatních kritiků z tohoto kola:**
+                {peer_reviews_md if peer_reviews_md else "Zatím hodnotíš jako první, sborník je čistý."}
+                """).strip()
+                
+            user_prompt += textwrap.dedent(f"""
+                Ohodnoť povídku v češtině. Zohledni výtky kolegů kritiků (můžeš s nimi souhlasit nebo je setřít). Pokud jsi Lore-master, hlídej rozpor s PŮVODNÍ BIBLÍ. 
                 Pokud autor v povídce nebo lokálních poznámkách poruší kánon (např. technologie v čistém fantasy), okamžitě ho za to sestřel.
                 Vrať POUZE JSON podle schématu.""").strip()
 
@@ -319,25 +337,65 @@ async def _critic_task(client, semaphore, db, story, author, critic):
         finally:
             state.critic_statuses[critic.id] = "☕️ Zpracováno. Čeká na další."
             
-async def _author_rebuttal_task(client, semaphore, author, story, review, critic):
+async def _author_rebuttal_task(client, semaphore, author, story, review, critic, debate_round=1):
     async with semaphore:
-        state.author_statuses[author.id] = f"🥊 Čte kritiku od {critic.name} a chystá obhajobu."
+        state.author_statuses[author.id] = f"🥊 Čte kritiku od {critic.name} (Kolo hádek {debate_round})."
         try:
-            system_prompt = f"Jsi autor jménem {author.name}.\nTvůj styl: {author.style}\nTvůj manuál: {author.persona_prompt}\nTvé vztahy a názory na kritiky: {author.relationships}\nNyní ti kritik vmetl do tváře recenzi. Napiš krátkou údernou a případně mírně uraženou nebo vděčnou reakci (rebuttal). Můžeš kritika i trochu sejmout, pokud nesouhlasíš. Musíš psát v první osobě jako ten autor."
-            user_prompt = f"Tvoje povídka:\n{story.title}\n{story.text_md}\n\nKritika od {critic.name}:\nSkóre: {review.scores_json}\n{review.review_md}\n\nNapiš svou reakci (ideálně odstavec nebo dva, do max 100 slov). Reakci vrať jako prostý text."
+            # Rozbalení předchozí diskuze
+            discussion_history = []
+            if review.discussion_json:
+                try: discussion_history = json.loads(review.discussion_json)
+                except: pass
+            
+            history_md = ""
+            for msg in discussion_history:
+                role_name = "Ty" if msg["role"] == "author" else critic.name
+                history_md += f"\n{role_name}: {msg['text']}\n"
+            
+            system_prompt = f"Jsi autor jménem {author.name}.\nTvůj styl: {author.style}\nTvůj manuál: {author.persona_prompt}\nTvé vztahy a názory na kritiky: {author.relationships}\nNyní se bavíš s kritikem ohledně své poslední povídky. Napiš krátkou údernou a případně mírně uraženou nebo vděčnou reakci. Můžeš kritika i trochu sejmout, pokud nesouhlasíš. Musíš psát v první osobě jako ten autor."
+            
+            user_prompt = f"Tvoje povídka:\n{story.title}\n{story.text_md}\n\nPůvodní kritika od {critic.name}:\nSkóre: {review.scores_json}\n{review.review_md}\n"
+            if history_md:
+                user_prompt += f"\nDosavadní průběh hádky s kritikem:{history_md}\n"
+            user_prompt += "\nNapiš svou další reakci (ideálně odstavec, do max 100 slov). Vrať pouze prostý text odpovědi bez uvozovek."
+            
             rebuttal = await _call_ollama_async(client, OLLAMA_MODEL, system_prompt, user_prompt, temperature=0.7)
-            review.author_rebuttal = rebuttal
+            
+            # Append do JSON a fallback pro fallback UI z minula
+            if rebuttal:
+                if debate_round == 1: review.author_rebuttal = rebuttal # Stále zazálohuji pro starý list
+                discussion_history.append({"role": "author", "text": rebuttal.strip()})
+                review.discussion_json = json.dumps(discussion_history, ensure_ascii=False)
         finally:
             pass
 
-async def _critic_final_task(client, semaphore, critic, review, author):
+async def _critic_final_task(client, semaphore, critic, review, author, debate_round=1):
     async with semaphore:
-        state.critic_statuses[critic.id] = f"🥊 Reaguje na obhajobu od {author.name}."
+        state.critic_statuses[critic.id] = f"🥊 Reaguje na obhajobu od {author.name} (Kolo hádek {debate_round})."
         try:
-            system_prompt = f"{critic.persona_prompt}\nTvoje vztahy k ostatním: {critic.relationships}\nJsi kritik {critic.name}. Hodnotils autora {author.name} a dostals od něj obhajobu na svou recenzi. Napiš krátké konečné shrnutí - 'final verdict'. Můžeš mu ustoupit, nebo ho zaříznout ještě více. Piš v první osobě jako ten kritik."
-            user_prompt = f"Tvoje skóre: {review.scores_json}\nTvůj text: {review.review_md}\n\nAutorova obhajoba:\n{review.author_rebuttal}\n\nNapiš svou finální krátkou reakci na autora (do 50 slov) jako prostý text."
+            discussion_history = []
+            if review.discussion_json:
+                try: discussion_history = json.loads(review.discussion_json)
+                except: pass
+                
+            history_md = ""
+            for msg in discussion_history:
+                role_name = author.name if msg["role"] == "author" else "Ty"
+                history_md += f"\n{role_name}: {msg['text']}\n"
+                
+            system_prompt = f"{critic.persona_prompt}\nTvoje vztahy k ostatním: {critic.relationships}\nJsi kritik {critic.name}. Hodnotils autora {author.name} a vedeš s ním rozpravu (autor ti zaslal obhajobu). Napiš břitkou reakci. Můžeš mu ustoupit, nebo ho zaříznout. Piš v první osobě jako ten kritik."
+            
+            user_prompt = f"Tvoje původní skóre pro povídku {author.name}: {review.scores_json}\nTvůj původní text: {review.review_md}\n"
+            if history_md:
+                user_prompt += f"\nDosavadní průběh komunikace s autorem:{history_md}\n"
+            user_prompt += "\nNapiš svou další, případně úplně finální krátkou reakci na autora (do 50 slov) jako prostý text."
+            
             final_response = await _call_ollama_async(client, OLLAMA_MODEL, system_prompt, user_prompt, temperature=0.6)
-            review.critic_final_response = final_response
+            
+            if final_response:
+                if debate_round == 1: review.critic_final_response = final_response
+                discussion_history.append({"role": "critic", "text": final_response.strip()})
+                review.discussion_json = json.dumps(discussion_history, ensure_ascii=False)
         finally:
             state.critic_statuses[critic.id] = "☕️ Souboj dobojován."
 
@@ -424,45 +482,44 @@ async def run_round_orchestration_async(start_round_num: int, num_rounds: int = 
                 db.commit()
                 for s in valid_stories: db.refresh(s)
                 
-                # Kritika - Fáze 1 (Čtení + Recenzování)
-                critic_tasks = []
+                # Kritika - Fáze 1 (Čtení + Recenzování + Sdílený kontext)
+                valid_reviews = []
                 for story in valid_stories:
                     story_author = next(a for a in authors if a.id == story.author_id)
+                    story_reviews = []
+                    
+                    # Kritici pro tuto povídku běží sekvenčně přes gather (jeden po druhém dostává kontext těch předchozích)
                     for critic in critics:
-                        critic_tasks.append(_critic_task(client, semaphore, db, story, story_author, critic))
-                
-                reviews_results = await asyncio.gather(*critic_tasks, return_exceptions=True)
-                valid_reviews = []
-                # Odfiltrování exceptions
-                clean_reviews = [r if not isinstance(r, Exception) else None for r in reviews_results]
-                for (story, critic), rev in zip([(s, c) for s in valid_stories for c in critics], clean_reviews):
-                    if rev:
-                        rev.story_id = story.id 
-                        valid_reviews.append(rev)
+                        rev = await _critic_task(client, semaphore, db, story, story_author, critic, story_reviews)
+                        if rev and not isinstance(rev, Exception):
+                            rev.story_id = story.id 
+                            story_reviews.append(rev)
+                            valid_reviews.append(rev)
                 
                 db.add_all(valid_reviews)
                 db.commit()
 
-                # Debata - Fáze 2 (Rebuttal autorek na recenze)
-                rebuttal_tasks = []
-                for review in valid_reviews:
-                    author = next(a for a in authors if a.id == next(s.author_id for s in valid_stories if s.id == review.story_id))
-                    critic = next(c for c in critics if c.id == review.critic_id)
-                    story = next(s for s in valid_stories if s.id == review.story_id)
-                    rebuttal_tasks.append(_author_rebuttal_task(client, semaphore, author, story, review, critic))
-                
-                await asyncio.gather(*rebuttal_tasks, return_exceptions=True)
-                db.commit()
+                # Debata - Fáze 2 a 3 (Nekonečná Zřetězená smyčka S -> K -> S -> K)
+                NUM_DEBATE_ROUNDS = 2
+                for debate_round in range(1, NUM_DEBATE_ROUNDS + 1):
+                    rebuttal_tasks = []
+                    for review in valid_reviews:
+                        author = next(a for a in authors if a.id == next(s.author_id for s in valid_stories if s.id == review.story_id))
+                        critic = next(c for c in critics if c.id == review.critic_id)
+                        story = next(s for s in valid_stories if s.id == review.story_id)
+                        rebuttal_tasks.append(_author_rebuttal_task(client, semaphore, author, story, review, critic, debate_round))
+                    
+                    await asyncio.gather(*rebuttal_tasks, return_exceptions=True)
+                    db.commit()
 
-                # Debata - Fáze 3 (Final Verdict kritiků)
-                final_tasks = []
-                for review in valid_reviews:
-                    author = next(a for a in authors if a.id == next(s.author_id for s in valid_stories if s.id == review.story_id))
-                    critic = next(c for c in critics if c.id == review.critic_id)
-                    final_tasks.append(_critic_final_task(client, semaphore, critic, review, author))
-                
-                await asyncio.gather(*final_tasks, return_exceptions=True)
-                db.commit()
+                    final_tasks = []
+                    for review in valid_reviews:
+                        author = next(a for a in authors if a.id == next(s.author_id for s in valid_stories if s.id == review.story_id))
+                        critic = next(c for c in critics if c.id == review.critic_id)
+                        final_tasks.append(_critic_final_task(client, semaphore, critic, review, author, debate_round))
+                    
+                    await asyncio.gather(*final_tasks, return_exceptions=True)
+                    db.commit()
                 
                 for c in critics: state.critic_statuses[c.id] = "🏁 Hodnocení dobojováno."
 

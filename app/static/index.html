@@ -259,6 +259,18 @@
                                             {{ author.local_bible }}</div>
                                     </div>
 
+                                    <div class="mt-4 border-t border-slate-700/50 pt-4">
+                                        <p
+                                            class="text-pink-400 font-bold tracking-wider text-center mb-2 uppercase text-[10px]">
+                                            RPG Profil (Průměrné hodnocení)</p>
+                                        <div
+                                            class="bg-slate-950 p-4 rounded border border-slate-800/80 flex justify-center">
+                                            <div class="relative w-full max-w-[240px] aspect-square">
+                                                <canvas :id="'radarChart-author-' + author.id"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <div v-if="author.write_mode === 'novel' && author.novel_outline">
                                         <p class="text-blue-400 font-bold tracking-wider mt-2">📖 Osnova románu:</p>
                                         <div
@@ -458,7 +470,7 @@
 
                     <div v-else class="space-y-6">
                         <transition-group name="list" tag="div" class="space-y-6">
-                            <div v-for="story in stories.slice().reverse()" :key="story.id"
+                            <div v-for="story in stories" :key="story.id"
                                 class="border border-slate-700 rounded-lg overflow-hidden bg-slate-950 shadow-lg">
                                 <!-- Hlavička povídky -->
                                 <div class="bg-slate-800 px-4 py-3 flex justify-between items-center cursor-pointer hover:bg-slate-700 transition"
@@ -599,29 +611,42 @@
                                                 {{ review.review_md }}
                                             </div>
 
-                                            <!-- Debata: Rebuttal & Final -->
-                                            <div v-if="review.author_rebuttal || review.critic_final_response"
+                                            <!-- Debata: Fáze 11 Booster Simulator (Rekurzivní JSON Chat) -->
+                                            <div v-if="review.discussion_json && parseDiscussion(review.discussion_json).length > 0"
                                                 class="mt-6 pt-5 border-t border-slate-800 space-y-4">
-                                                <div v-if="review.author_rebuttal"
-                                                    class="bg-blue-950/30 border-l-[3px] border-blue-500 p-4 relative">
-                                                    <strong
-                                                        class="text-blue-400 text-xs uppercase tracking-widest block mb-2 flex items-center">
-                                                        > INTERCOM: Obhajoba Autora
-                                                    </strong>
-                                                    <div
-                                                        class="text-sm text-blue-200 whitespace-pre-wrap italic leading-relaxed text-[13px]">
-                                                        "{{ review.author_rebuttal }}"
+
+                                                <h5
+                                                    class="text-xs uppercase tracking-widest text-slate-500 mb-4 text-center">
+                                                    --- PŘEPIS HÁDKY ---</h5>
+
+                                                <div v-for="(msg, idx) in parseDiscussion(review.discussion_json)"
+                                                    :key="idx" class="flex w-full"
+                                                    :class="msg.role === 'author' ? 'justify-end' : 'justify-start'">
+
+                                                    <!-- Bublina Spisovatele (Vpravo) -->
+                                                    <div v-if="msg.role === 'author'"
+                                                        class="max-w-[85%] bg-blue-950/30 border-r-[3px] border-blue-500 p-3 rounded-l-lg rounded-tr-sm relative text-right">
+                                                        <strong
+                                                            class="text-blue-400 text-[10px] uppercase tracking-widest block mb-1">
+                                                            {{ getAuthorName(story.author_id) }} (Obhajoba)
+                                                        </strong>
+                                                        <div
+                                                            class="text-sm text-blue-200 whitespace-pre-wrap italic leading-relaxed text-[13px]">
+                                                            "{{ msg.text }}"
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <div v-if="review.critic_final_response"
-                                                    class="bg-rose-950/30 border-l-[3px] border-rose-500 p-4 relative">
-                                                    <strong
-                                                        class="text-rose-400 text-xs uppercase tracking-widest block mb-2 flex items-center">
-                                                        > SYSTEM OVERRIDE: Verdikt Kritika
-                                                    </strong>
-                                                    <div
-                                                        class="text-sm text-rose-200 whitespace-pre-wrap leading-relaxed text-[13px]">
-                                                        {{ review.critic_final_response }}
+
+                                                    <!-- Bublina Kritika (Vlevo) -->
+                                                    <div v-if="msg.role === 'critic'"
+                                                        class="max-w-[85%] bg-rose-950/30 border-l-[3px] border-rose-500 p-3 rounded-r-lg rounded-tl-sm relative text-left">
+                                                        <strong
+                                                            class="text-rose-400 text-[10px] uppercase tracking-widest block mb-1">
+                                                            {{ getCriticName(review.critic_id) }} (Verdikt)
+                                                        </strong>
+                                                        <div
+                                                            class="text-sm text-rose-200 whitespace-pre-wrap leading-relaxed text-[13px]">
+                                                            {{ msg.text }}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -790,6 +815,18 @@
                     return reader_reviews.value.filter(r => r.story_id == storyId);
                 };
 
+                const parseDiscussion = (jsonString) => {
+                    if (!jsonString || jsonString === "[]") return [];
+                    try {
+                        let data = JSON.parse(jsonString);
+                        // Pokud je to nejaky omyl a neni to array, zabalime
+                        if (!Array.isArray(data)) return [];
+                        return data;
+                    } catch (e) {
+                        return [];
+                    }
+                };
+
                 const parseScores = (jsonStr) => {
                     try {
                         return JSON.parse(jsonStr);
@@ -858,12 +895,104 @@
                     }
                 }, { deep: true });
 
+                let currentChart = null;
+                const calculateAuthorStats = (authorId) => {
+                    const authorStories = stories.value.filter(s => s.author_id === authorId);
+                    const storyIds = authorStories.map(s => s.id);
+                    const authorReviews = reviews.value.filter(r => storyIds.includes(r.story_id));
+
+                    if (authorReviews.length === 0) return null;
+
+                    const aggregated = {};
+                    const counts = {};
+
+                    authorReviews.forEach(r => {
+                        const scores = parseScores(r.scores_json);
+                        for (const [key, val] of Object.entries(scores)) {
+                            // Filter out completely generic or unparseable numbers
+                            const parsedVal = parseFloat(val);
+                            if (isNaN(parsedVal)) continue;
+
+                            // Clean key for visual display
+                            let cleanKey = key.replace(/_/g, ' ').toUpperCase();
+                            if (cleanKey.length > 20) cleanKey = cleanKey.substring(0, 17) + '...';
+
+                            if (!aggregated[cleanKey]) {
+                                aggregated[cleanKey] = 0;
+                                counts[cleanKey] = 0;
+                            }
+                            aggregated[cleanKey] += parsedVal;
+                            counts[cleanKey] += 1;
+                        }
+                    });
+
+                    const labels = [];
+                    const data = [];
+                    // Return at most 6 properties to keep radar readable
+                    const entries = Object.keys(aggregated).map(k => ({
+                        k, v: (aggregated[k] / counts[k]).toFixed(1)
+                    })).sort((a, b) => b.v - a.v).slice(0, 6);
+
+                    for (const entry of entries) {
+                        labels.push(entry.k);
+                        data.push(entry.v);
+                    }
+                    if (labels.length === 0) return null;
+                    return { labels, data };
+                };
+
+                watch(activeAuthor, async (newVal) => {
+                    if (currentChart) {
+                        currentChart.destroy();
+                        currentChart = null;
+                    }
+                    if (newVal) {
+                        await nextTick();
+                        const canvasId = 'radarChart-author-' + newVal.id;
+                        const canvas = document.getElementById(canvasId);
+                        if (canvas) {
+                            const stats = calculateAuthorStats(newVal.id);
+                            if (stats) {
+                                currentChart = new Chart(canvas, {
+                                    type: 'radar',
+                                    data: {
+                                        labels: stats.labels,
+                                        datasets: [{
+                                            label: 'Průměrné Skóre',
+                                            data: stats.data,
+                                            backgroundColor: 'rgba(236, 72, 153, 0.2)',
+                                            borderColor: 'rgba(236, 72, 153, 0.8)',
+                                            pointBackgroundColor: 'rgba(236, 72, 153, 1)',
+                                            pointBorderColor: '#fff',
+                                            pointHoverBackgroundColor: '#fff',
+                                            pointHoverBorderColor: 'rgba(236, 72, 153, 1)'
+                                        }]
+                                    },
+                                    options: {
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        scales: {
+                                            r: {
+                                                angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                                                grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                                                pointLabels: { color: '#cbd5e1', font: { size: 9, family: 'monospace' } },
+                                                ticks: { display: false, min: 0, max: 10, stepSize: 2 }
+                                            }
+                                        },
+                                        plugins: { legend: { display: false } }
+                                    }
+                                });
+                            }
+                        }
+                    }
+                });
+
                 return {
                     authors, critics, readers, worlds, stories, reviews, reader_reviews, isRunning, form, orchestratorState,
                     activeAuthor, activeStoryId, activeTab, serverLogs, logContainer,
                     initReborn, runRound, fetchData, getAuthorName, getCriticName, getReaderName,
                     toggleStory, getStoryReviews, getStoryReaderReviews, parseScores, getScoreColor,
-                    getStoryTextFixer
+                    getStoryTextFixer, parseDiscussion
                 }
             }
         }).mount('#app');

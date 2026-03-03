@@ -64,8 +64,9 @@ class Review(Base):
     critic_id = Column(Integer) # Id kritika 1-4 (foreign key to critic.id by logicky sedel, ale resim pres id)
     scores_json = Column(Text) # JSON skóre
     review_md = Column(Text)
-    author_rebuttal = Column(Text, nullable=True)
-    critic_final_response = Column(Text, nullable=True)
+    author_rebuttal = Column(Text, nullable=True) # ZASTARALÉ: bude smazáno po migraci nebo fallback
+    critic_final_response = Column(Text, nullable=True) # ZASTARALÉ
+    discussion_json = Column(Text, default="[]") # NOVÉ: Pole historie konverzace [role, text]
     created_at = Column(TIMESTAMP, server_default=func.now())
 
     story = relationship("Story", back_populates="reviews")

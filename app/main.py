@@ -68,6 +68,7 @@ class ReviewResponse(BaseModel):
     review_md: str
     author_rebuttal: Optional[str] = None
     critic_final_response: Optional[str] = None
+    discussion_json: Optional[str] = "[]"
     created_at: str
 
     class Config:
